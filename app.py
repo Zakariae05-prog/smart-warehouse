@@ -1,94 +1,131 @@
 import streamlit as st
 import pandas as pd
 import math
+import random
 
-st.title("📦 Smart AI Warehouse")
+st.title("🏭 Smart Warehouse 4.0 - AI Picking System")
 
-# -------------------------
-# 📊 DATASET (simulation)
-# -------------------------
-data = pd.DataFrame({
-    "Product": ["A", "B", "C", "D", "E"],
-    "X": [1, 5, 2, 8, 6],
-    "Y": [1, 2, 6, 3, 7],
-    "Stock": [10, 8, 15, 5, 12]
-})
+# =========================
+# 📊 DATA STOCK
+# =========================
+if "data" not in st.session_state:
+    st.session_state.data = pd.DataFrame({
+        "Product": ["A", "B", "C", "D", "E"],
+        "X": [1, 5, 2, 8, 6],
+        "Y": [1, 2, 6, 3, 7],
+        "Stock": [10, 8, 15, 5, 12],
+        "Defect_rate": [0.1, 0.05, 0.2, 0.08, 0.12]
+    })
 
-st.subheader("📊 Stock actuel")
+data = st.session_state.data
+
+st.subheader("📊 Warehouse Stock")
 st.dataframe(data)
 
-# -------------------------
-# 📦 COMMANDES
-# -------------------------
-st.subheader("🛒 Nouvelle commande")
+# =========================
+# 📦 ORDERS
+# =========================
+st.subheader("🛒 New Order")
 
-products = st.multiselect(
-    "Choisir les produits",
+order = st.multiselect(
+    "Select products",
     data["Product"].tolist()
 )
 
-# -------------------------
-# 📏 FONCTION DISTANCE
-# -------------------------
+# =========================
+# 📏 DISTANCE
+# =========================
 def distance(p1, p2):
     return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
 
-# -------------------------
-# 🚀 OPTIMISATION SIMPLE (Nearest Neighbor)
-# -------------------------
-def optimize_path(order, df):
-    if not order:
-        return []
-
-    remaining = order.copy()
+# =========================
+# 🚀 OPTIMIZATION (simple AI)
+# =========================
+def optimize_path(order_list, df):
+    remaining = order_list.copy()
     path = []
-
-    # Point de départ (entrée entrepôt)
     current = (0, 0)
 
     while remaining:
         nearest = None
-        min_dist = float('inf')
+        min_dist = float("inf")
 
-        for product in remaining:
-            row = df[df["Product"] == product].iloc[0]
+        for p in remaining:
+            row = df[df["Product"] == p].iloc[0]
             pos = (row["X"], row["Y"])
             dist = distance(current, pos)
 
             if dist < min_dist:
                 min_dist = dist
-                nearest = product
+                nearest = p
 
         path.append(nearest)
-        row = df[df["Product"] == nearest].iloc[0]
-        current = (row["X"], row["Y"])
+        current = (df[df["Product"] == nearest].iloc[0]["X"],
+                   df[df["Product"] == nearest].iloc[0]["Y"])
         remaining.remove(nearest)
 
     return path
 
-# -------------------------
-# 📦 TRAITEMENT COMMANDE
-# -------------------------
-if st.button("Optimiser le picking"):
-    if not products:
-        st.warning("Choisissez au moins un produit")
+# =========================
+# 📡 QR SCAN SIMULATION
+# =========================
+st.subheader("📡 QR Scan System")
+
+scanned_product = st.selectbox("Scan product (simulate QR)", data["Product"].tolist())
+
+def scan_product(product):
+    # simulation defect detection
+    row = data[data["Product"] == product].iloc[0]
+    is_defect = random.random() < row["Defect_rate"]
+    return is_defect
+
+# =========================
+# 🚀 PROCESS ORDER
+# =========================
+if st.button("🚀 Process Order & Optimize Picking"):
+
+    if not order:
+        st.warning("Select at least one product")
     else:
-        path = optimize_path(products, data)
+        path = optimize_path(order, data)
 
-        st.success("✅ Chemin optimal calculé")
-        st.write("👉 Ordre de picking :", path)
+        st.success("✅ Optimized Picking Route Generated")
 
-        # Mise à jour du stock
-        for p in path:
-            data.loc[data["Product"] == p, "Stock"] -= 1
+        st.write("📍 Operator Path:")
+        st.write(" → ".join(path))
 
-        st.subheader("📉 Stock après picking")
-        st.dataframe(data)
+        st.session_state.current_order = path
 
-# -------------------------
-# 📊 KPI SIMPLE
-# -------------------------
-st.subheader("📈 KPI")
+# =========================
+# 📡 SCAN VALIDATION
+# =========================
+if st.button("📡 Scan Product"):
 
-total_stock = data["Stock"].sum()
+    is_defect = scan_product(scanned_product)
+
+    if is_defect:
+        st.error(f"❌ {scanned_product} is DEFECTIVE!")
+
+        st.warning("🚨 Alert sent to quality system")
+
+    else:
+        st.success(f"✅ {scanned_product} OK")
+
+        # update stock
+        data.loc[data["Product"] == scanned_product, "Stock"] -= 1
+        st.session_state.data = data
+
+# =========================
+# 📊 DASHBOARD
+# =========================
+st.subheader("📊 Live Dashboard")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Total Stock", int(data["Stock"].sum()))
+col2.metric("Products", len(data))
+col3.metric("Avg Defect Rate", round(data["Defect_rate"].mean(), 2))
+
+st.subheader("📦 Updated Stock")
+st.dataframe(data)].sum()
 st.metric("Stock total", total_stock)
